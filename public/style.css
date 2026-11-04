@@ -1,0 +1,101 @@
+:root {
+  --bg: #12141a; --panel: #1b1f29; --panel2: #232836; --line: #2f3547;
+  --text: #e6e9f2; --dim: #8a92a8; --accent: #4f9cff; --good: #3ddc84; --bad: #ff6b6b; --warn: #ffcb4d;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font-family: system-ui, "Malgun Gothic", sans-serif; display: flex; flex-direction: column; }
+.hidden { display: none !important; }
+.dim { color: var(--dim); }
+
+header { display: flex; align-items: center; gap: 18px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
+header h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 9px; letter-spacing: -.01em; }
+.logo { width: 30px; height: 30px; display: block; }
+/* 아이콘: Lucide SVG 를 글자색으로 칠한다 */
+.ic { display: inline-block; width: 1.15em; height: 1.15em; margin-right: .35em; vertical-align: -.2em; flex-shrink: 0; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+.lv .ic { margin: 0; }
+.big-ic { width: 1.3em; height: 1.3em; }
+.engine .ic { margin-right: .3em; }
+nav { display: flex; gap: 6px; }
+.tab { background: transparent; border: 1px solid var(--line); color: var(--dim); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+.tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.engine { margin-left: auto; font-size: 13px; }
+.engine.loading { color: var(--warn); } .engine.ok { color: var(--good); } .engine.fail { color: var(--bad); }
+
+main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(380px, 1fr) minmax(380px, 1fr); }
+#left { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; border-right: 1px solid var(--line); padding: 12px; gap: 10px; }
+#right { display: flex; flex-direction: column; align-items: center; min-height: 0; padding: 12px; gap: 8px; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.5; max-height: 30vh; overflow: auto; flex-shrink: 0; }
+#lessonPanel { max-height: 46vh; }
+#matchPanel { padding: 8px 14px; font-size: 13px; }
+#matchPanel h2 { font-size: 14px; margin-bottom: 2px; }
+#matchPanel h2 .dim { font-size: 12px; font-weight: 400; margin-left: 6px; }
+#matchPanel .tips { margin: 0; padding-left: 18px; }
+#matchPanel .tips li { margin: 1px 0; }
+.panel h2 { font-size: 16px; margin: 0 0 6px; }
+.panel code, .tip code { background: #0d0f14; padding: 1px 6px; border-radius: 5px; color: #9fe0ff; font-family: Consolas, monospace; }
+.panel pre { background: #0d0f14; padding: 8px 10px; border-radius: 8px; margin: 6px 0; font-family: Consolas, monospace; font-size: 13px; overflow: auto; }
+.goal { margin-top: 8px; padding: 8px 10px; background: #1d2a3f; border-left: 3px solid var(--accent); border-radius: 6px; }
+.tips { margin: 6px 0 0; padding-left: 18px; } .tips li { margin: 4px 0; }
+
+/* ── 학습 단계 스텝 바 ── */
+.lvhead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-shrink: 0; }
+.lvhead .step { font-weight: 800; font-size: 13px; letter-spacing: .08em; color: var(--accent); white-space: nowrap; }
+.lvhead .step small { color: var(--dim); font-weight: 600; }
+.lvhead .prog { flex: 1; height: 6px; border-radius: 99px; background: var(--panel2); overflow: hidden; }
+.lvhead .prog i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #3ddc84, #4f9cff); transition: width .4s; }
+.lvhead .cnt { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.levels { display: flex; align-items: center; margin: 0 6px 14px; padding: 4px 0; flex-shrink: 0; }
+.conn { flex: 1 1 6px; min-width: 6px; height: 3px; border-radius: 3px; background: var(--line); }
+.conn.done { background: #3ddc84; }
+.lv { flex: 0 0 auto; width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; font-size: 14px; font-weight: 700; line-height: 1; background: var(--panel2); border: 2px solid var(--line); color: var(--dim); cursor: pointer; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.lv:hover:not(.cur) { border-color: var(--accent); color: var(--text); transform: translateY(-2px); }
+.lv.done { background: linear-gradient(135deg, #46e58e, #24a85f); border-color: #3ddc84; color: #06361b; }
+.lv.cur { background: var(--accent); border-color: #9cc9ff; color: #fff; transform: scale(1.14); box-shadow: 0 0 0 4px #4f9cff40; }
+.lv.cur.done { background: linear-gradient(135deg, #46e58e, #24a85f); border-color: #9cc9ff; color: #06361b; }
+
+.editorWrap { flex: 1 1 auto; min-height: 240px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.CodeMirror { height: 100%; font-family: Consolas, "D2Coding", monospace; font-size: 15px; }
+.cm-s-material-darker .cm-comment { color: #a3b1c2; }
+
+.bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+button { font: inherit; font-size: 14px; background: var(--panel2); color: var(--text); border: 1px solid var(--line); padding: 7px 14px; border-radius: 8px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button small { opacity: .75; font-weight: normal; margin-left: 4px; }
+
+#console { margin: 0; flex: 0 0 auto; height: 96px; overflow: auto; background: #0b0d12; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-family: Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
+#console .err { color: var(--bad); } #console .ok { color: var(--good); } #console .info { color: var(--warn); }
+
+#topbar { width: min(100%, calc(100vh - 190px)); min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+#boardWrap { position: relative; width: min(100%, calc(100vh - 190px)); aspect-ratio: 1; }
+#board { width: 100%; height: 100%; border-radius: 12px; display: block; box-shadow: 0 6px 24px #0008; }
+#hover { font-family: Consolas, monospace; font-size: 13px; color: var(--dim); height: 18px; }
+
+#overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #000a; border-radius: 12px; padding: 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; width: min(100%, 360px); display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.card h3 { margin: 0 0 4px; font-size: 18px; }
+.card input { font: inherit; background: #0d0f14; color: var(--text); border: 1px solid var(--line); padding: 9px 12px; border-radius: 8px; text-align: center; }
+.card input.code { text-transform: uppercase; letter-spacing: 6px; font-weight: bold; font-size: 18px; }
+.card .row { display: flex; gap: 8px; } .card .row input { flex: 1; min-width: 0; }
+.card .msg { color: var(--bad); font-size: 13px; min-height: 16px; }
+.lobbyLabel { font-size: 13px; font-weight: 600; text-align: left; margin-top: 4px; }
+.lobbyLabel .dim { font-weight: 400; font-size: 12px; margin-left: 4px; }
+.aiLevels button { flex: 1; }
+button.mini { padding: 2px 8px; font-size: 12px; }
+.link { word-break: break-all; font-family: Consolas, monospace; font-size: 13px; background: #0d0f14; padding: 8px; border-radius: 8px; user-select: all; }
+.dotb, .dotw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+.dotb { background: #111; border: 1px solid #888; } .dotw { background: #f2f2f2; border: 1px solid #888; }
+.pill { padding: 3px 10px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); }
+.pill.turn { border-color: var(--good); color: var(--good); }
+.off { opacity: .45; }
+.offline { color: var(--bad); font-weight: 600; }
+
+@media (max-width: 900px) {
+  main { grid-template-columns: 1fr; overflow: auto; }
+  #left { border-right: 0; }
+  #topbar, #boardWrap { width: 100%; }
+  .editorWrap { min-height: 260px; }
+}

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>파이썬 오목</title>
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material-darker.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1><img src="logo.svg" alt="" class="logo">파이썬 오목</h1>
+  <nav>
+    <button id="tabLearn" class="tab active"><i class="ic" style="--ic:url(icons/book-open.svg)"></i>학습</button>
+    <button id="tabMatch" class="tab"><i class="ic" style="--ic:url(icons/swords.svg)"></i>대전</button>
+  </nav>
+  <span id="engine" class="engine loading">파이썬 엔진 로딩 중…</span>
+</header>
+
+<main>
+  <section id="left">
+    <div id="lessonPanel" class="panel"></div>
+    <div id="matchPanel" class="panel hidden"></div>
+    <div class="editorWrap"><textarea id="code"></textarea></div>
+    <div class="bar">
+      <button id="runBtn" class="primary" disabled><i class="ic" style="--ic:url(icons/play.svg)"></i>실행 <small>Ctrl+Enter</small></button>
+      <button id="resetBtn"><i class="ic" style="--ic:url(icons/rotate-ccw.svg)"></i>처음 코드로</button>
+      <span id="learnBtns">
+        <button id="hintBtn"><i class="ic" style="--ic:url(icons/lightbulb.svg)"></i>힌트</button>
+        <button id="solBtn"><i class="ic" style="--ic:url(icons/key-round.svg)"></i>정답</button>
+      </span>
+    </div>
+    <pre id="console"><span class="dim">여기에 실행 결과가 나와요.</span></pre>
+  </section>
+
+  <section id="right">
+    <div id="topbar"></div>
+    <div id="boardWrap">
+      <canvas id="board" width="720" height="720"></canvas>
+      <div id="overlay" class="hidden"></div>
+    </div>
+    <div id="hover">&nbsp;</div>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
