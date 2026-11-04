@@ -2,13 +2,9 @@
   "name": "python-omok",
   "version": "1.0.0",
   "description": "파이썬 코드로 돌을 두는 오목 게임 - 친구와 1:1, AI 대결, 8단계 학습",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "test": "node test/ai.test.js"
-  },
-  "dependencies": {
-    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=18"

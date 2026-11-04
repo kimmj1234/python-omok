@@ -1,8 +1,7 @@
 'use strict';
 // AI 끼리 대국: 모든 수가 서버 규칙(walk)을 통과하는지, 난이도 순서가 맞는지, 한 수에 얼마나 걸리는지 확인
-const ROOT = '../';
-const { walk, reachable, hasLegalMove, checkWin } = require(ROOT + 'server.js');
-const { chooseMove } = require(ROOT + 'ai.js');
+const { walk, reachable, hasLegalMove, checkWin } = require('../public/game.js');
+const { chooseMove } = require('../public/ai.js');
 const N = 15;
 const empty = () => Array.from({ length: N }, () => Array(N).fill(0));
 

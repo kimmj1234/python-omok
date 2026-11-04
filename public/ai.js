@@ -1,4 +1,5 @@
 'use strict';
+(function (root) {
 // 오목 AI. 사람과 같은 규칙으로 움직이도록 reachable(board) 가 알려 준 칸에만 둔다.
 const N = 15;
 const LINES = [[1, 0], [0, 1], [1, 1], [1, -1]];
@@ -99,4 +100,7 @@ function chooseMove(board, color, level, reachable) {
   return level === 'hard' ? lookAhead(board, color, moves, reachable) : moves[0];
 }
 
-module.exports = { chooseMove };
+const api = { chooseMove };
+if (typeof module !== 'undefined') module.exports = api;
+else root.OmokAI = api;
+})(typeof self !== 'undefined' ? self : this);

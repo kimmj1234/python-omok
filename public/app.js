@@ -1,14 +1,14 @@
 'use strict';
 // ============================================================
 //  파이썬 오목 - 클라이언트
-//  학습 모드(단계별 파이썬 수업) + 1:1 대전 모드(WebSocket)
+//  학습 모드(단계별 파이썬 수업) + 대전 모드(친구 1:1, AI)
 // ============================================================
 const N = 15;
 const $ = (s) => document.querySelector(s);
 const emptyBoard = () => Array.from({ length: N }, () => Array(N).fill(0));
 const cloneBoard = (b) => b.map((r) => r.slice());
 // 아이콘(public/icons 의 Lucide SVG)
-const ic = (name) => `<i class="ic" style="--ic:url(icons/${name}.svg)"></i>`;
+const ic = (name) => `<i class="ic" style="--ic:url(icons/${String(name).replace(/[^a-z-]/g, '')}.svg)"></i>`;
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
@@ -254,7 +254,7 @@ const learn = {
   board: emptyBoard(), ghost: null, path: [],
 };
 const match = {
-  ws: null, online: false, pending: null, room: null, token: null, state: null, ghost: null, path: [], code: null, msg: '',
+  net: null, online: false, pending: null, room: null, token: null, state: null, ghost: null, path: [], code: null, msg: '',
   nick: store.get('pyomok.nick', ''), lastKey: '',
 };
 const MATCH_STARTER =
@@ -348,16 +348,16 @@ async function run() {
       showResult(res);
       if (res.ok && res.placed.length) {
         if (!match.online) {
-          appendConsole('서버에 연결되어 있지 않아 돌을 놓지 못했어요. 다시 연결되면 실행해 주세요.', 'err', 'unplug');
+          appendConsole('상대와 연결되어 있지 않아 돌을 놓지 못했어요. 다시 연결되면 실행해 주세요.', 'err', 'unplug');
         } else {
-          // 좌표가 아니라 이동 경로를 보내면 서버가 직접 검증한다. 성공 메시지는 서버가 확인한 뒤에 표시.
-          appendConsole('서버가 확인하는 중…', 'dim', 'hourglass');
-          send({ t: 'move', steps: stepsFrom(res.placed[0].path) });
+          // 좌표가 아니라 이동 경로를 보내면 방을 만든 쪽이 직접 검증한다. 성공 메시지는 확인을 받은 뒤에 표시.
+          appendConsole('확인하는 중…', 'dim', 'hourglass');
           clearPending();
           match.pending = setTimeout(() => {
             match.pending = null;
-            appendConsole('서버 응답이 없어요. 판을 확인하고 다시 시도해 주세요.', 'err', 'triangle-alert');
+            appendConsole('응답이 없어요. 판을 확인하고 다시 시도해 주세요.', 'err', 'triangle-alert');
           }, 5000);
+          send({ t: 'move', steps: stepsFrom(res.placed[0].path) });
         }
         match.ghost = null; match.path = [];
       } else if (res.ok && myTurn) {
@@ -369,7 +369,7 @@ async function run() {
     $('#runBtn').disabled = !engineReady;
   }
 }
-// 경로 [[1,1],[2,1],[2,2]] -> "RD" (서버로 보내는 이동 기록)
+// 경로 [[1,1],[2,1],[2,2]] -> "RD" (상대에게 보내는 이동 기록)
 function stepsFrom(path) {
   let s = "";
   for (let i = 1; i < path.length; i++) {
@@ -386,42 +386,133 @@ function ghostFrom(res) {
 }
 
 // ============================================================
-//  대전 모드 (WebSocket)
+//  대전 모드 - 서버 없이 브라우저끼리 연결
+//   방을 만든 사람의 브라우저가 규칙과 턴을 관리하고(game.js), 친구는 PeerJS(WebRTC)로 접속한다.
+//   AI 대전은 내 브라우저 안에서만 돌아간다.
 // ============================================================
-function wsUrl() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'; }
-function send(o) { if (match.ws && match.ws.readyState === 1) match.ws.send(JSON.stringify(o)); }
+const { RoomHost } = OmokGame;
+const PEER_PREFIX = 'pyomok-v1-';
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const BEAT_MS = 5000, SILENCE_MS = 15000, REJOIN_TRIES = 12;
+const hostKey = (code) => 'pyomok.host.' + code;
+const tokenKey = (code) => 'pyomok.token.' + code;
+function randomCode() {
+  let c = '';
+  for (let i = 0; i < 4; i++) c += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return c;
+}
+function send(o) { if (match.net) match.net.send(o); }
 function clearPending() {
   if (match.pending) { clearTimeout(match.pending); match.pending = null; }
 }
-function connect() {
+function closeNet() {
+  const net = match.net;
+  match.net = null;
+  if (!net) return;
+  clearInterval(net.beat);
+  if (net.host) net.host.stop();
+  // 마지막 메시지가 나갈 시간을 잠깐 준다
+  if (net.peer) setTimeout(() => net.peer.destroy(), 200);
+}
+function openPeer(id) {
   return new Promise((resolve, reject) => {
-    const old = match.ws;
-    const ws = new WebSocket(wsUrl());
-    match.ws = ws;
-    if (old) old.close();
-    ws.onopen = () => resolve();
-    ws.onerror = () => reject(new Error('서버에 연결할 수 없어요'));
-    ws.onmessage = (e) => onServer(JSON.parse(e.data));
-    ws.onclose = () => {
-      if (match.ws !== ws) return;
-      match.ws = null;
-      const wasOnline = match.online;
-      match.online = false;
-      if (match.pending) { clearPending(); appendConsole('연결이 끊겼어요. 다시 연결되면 판을 확인해 주세요.', 'err', 'unplug'); }
-      if (match.room) {
-        if (wasOnline) renderMatchUI();
-        setTimeout(rejoin, 1500);
-      }
-    };
+    const peer = new Peer(id, { debug: 0 });
+    const timer = setTimeout(() => { peer.destroy(); reject(new Error('timeout')); }, 10000);
+    peer.on('open', () => { clearTimeout(timer); resolve(peer); });
+    peer.on('error', (e) => { clearTimeout(timer); reject(e); });
   });
 }
-async function rejoin() {
-  if (!match.room || match.ws) return;
-  // 연결에 실패하면 onclose 가 다시 시도를 예약한다
-  try { await connect(); send({ t: 'join', room: match.room, token: match.token, name: match.nick }); }
-  catch {}
+
+// ---------- 방을 만든 쪽 ----------
+function startHost(host) {
+  const me = { send: (m) => { if (match.net === net) onServer(m); } };
+  const net = {
+    host, links: new Set(),
+    send: (o) => setTimeout(() => { if (match.net === net) host.handle(me, o); }, 0),
+  };
+  closeNet();
+  match.net = net;
+  return net;
 }
-// 방이 사라졌을 때 (서버가 다시 시작되면 방은 사라진다) 처음 화면으로 돌아간다
+function listenForGuest(net, peer) {
+  net.peer = peer;
+  peer.on('connection', (conn) => {
+    const link = { send: (m) => { if (conn.open) conn.send(m); }, lastSeen: Date.now(), conn };
+    net.links.add(link);
+    conn.on('data', (m) => {
+      link.lastSeen = Date.now();
+      if (match.net === net && m && m.t !== 'ping') net.host.handle(link, m);
+    });
+    conn.on('close', () => { net.links.delete(link); if (match.net === net) net.host.detach(link); });
+    conn.on('error', () => {});
+  });
+  net.beat = setInterval(() => {
+    if (peer.disconnected && !peer.destroyed) peer.reconnect(); // 초대 받을 수 있도록 중개 서버에 다시 연결
+    for (const link of net.links) {
+      if (Date.now() - link.lastSeen > SILENCE_MS) { link.conn.close(); net.links.delete(link); net.host.detach(link); }
+      else link.send({ t: 'ping' });
+    }
+  }, BEAT_MS);
+}
+// 새로고침한 뒤 같은 방 코드를 되찾는다. 잠시 이전 연결이 남아 있으면 비워질 때까지 다시 시도한다.
+async function reopenRoom(net, code) {
+  while (match.net === net) {
+    try {
+      const peer = await openPeer(PEER_PREFIX + code);
+      if (match.net !== net) return peer.destroy();
+      return listenForGuest(net, peer);
+    } catch { await new Promise((r) => setTimeout(r, 3000)); }
+  }
+}
+
+// ---------- 입장하는 쪽 ----------
+function connectGuest(code) {
+  return openPeer().then((peer) => new Promise((resolve, reject) => {
+    const conn = peer.connect(PEER_PREFIX + code, { reliable: true, serialization: 'json' });
+    const net = { peer, send: (o) => { if (conn.open) conn.send(o); }, lastSeen: Date.now() };
+    const fail = () => { clearTimeout(timer); peer.destroy(); reject(new Error('no_room')); };
+    const timer = setTimeout(fail, 15000);
+    peer.on('error', (e) => { if (e.type === 'peer-unavailable') fail(); });
+    conn.on('error', () => {});
+    conn.on('data', (m) => {
+      net.lastSeen = Date.now();
+      if (match.net === net && m && m.t !== 'ping') onServer(m);
+    });
+    conn.on('close', () => dropGuest(net));
+    conn.on('open', () => {
+      clearTimeout(timer);
+      closeNet();
+      match.net = net;
+      net.lastSeen = Date.now();
+      net.beat = setInterval(() => {
+        if (Date.now() - net.lastSeen > SILENCE_MS) return dropGuest(net);
+        net.send({ t: 'ping' });
+      }, BEAT_MS);
+      resolve(net);
+    });
+  }));
+}
+function dropGuest(net) {
+  if (match.net !== net) return;
+  closeNet();
+  match.online = false;
+  if (match.pending) { clearPending(); appendConsole('연결이 끊겼어요. 다시 연결되면 판을 확인해 주세요.', 'err', 'unplug'); }
+  if (match.room) { renderMatchUI(); match.rejoinTries = 0; setTimeout(rejoin, 1500); }
+}
+async function rejoin() {
+  const room = match.room;
+  if (!room || match.net) return;
+  try {
+    await connectGuest(room);
+    if (match.room !== room) return closeNet();
+    send({ t: 'join', room, token: match.token, name: match.nick });
+  } catch {
+    if (match.room !== room) return;
+    if (++match.rejoinTries >= REJOIN_TRIES) return leaveRoom('방을 만든 사람과 연결이 끊겼어요. 새 방을 만들어 주세요.');
+    setTimeout(rejoin, 2000);
+  }
+}
+// 방이 사라졌을 때 처음 화면으로 돌아간다
 function leaveRoom(msg) {
   match.room = null; match.token = null; match.state = null; match.online = false;
   match.ghost = null; match.path = []; match.lastKey = ''; match.msg = msg;
@@ -431,26 +522,32 @@ function leaveRoom(msg) {
 // 내가 방에서 나가 처음 화면으로 돌아간다
 function quitRoom() {
   clearPending();
-  send({ t: 'leave' });
-  tabStore.remove('pyomok.token.' + match.room);
+  const code = match.room, net = match.net;
+  if (net && net.host) net.host.close(); else send({ t: 'leave' });
+  tabStore.remove(tokenKey(code));
+  tabStore.remove(hostKey(code));
+  closeNet();
   resetMatchCode();
   logConsole(['(실행 버튼을 눌러 보세요)'], 'dim');
   leaveRoom('');
 }
 function onServer(m) {
+  if (m.t === 'closed') {
+    tabStore.remove(tokenKey(match.room));
+    closeNet();
+    return leaveRoom('방을 만든 사람이 방을 닫았어요.');
+  }
   if (m.t === 'error') {
     clearPending();
     appendConsole(m.msg, 'err', 'triangle-alert');
-    if (m.code === 'no_room') {
-      tabStore.remove('pyomok.token.' + m.room);
-      if (match.room) return leaveRoom('이전 방이 사라졌어요. 서버가 다시 시작되면 방이 사라져요. 새 방을 만들어 주세요.');
-    }
+    if (m.code === 'no_room') tabStore.remove(tokenKey(m.room));
+    if (!match.room) closeNet();
     match.msg = m.msg; renderMatchUI();
     return;
   }
   if (m.t === 'joined') {
     match.room = m.room; match.token = m.token; match.msg = ''; match.online = true;
-    tabStore.set('pyomok.token.' + m.room, m.token);
+    tabStore.set(tokenKey(m.room), m.token);
     history.replaceState(null, '', '?room=' + m.room);
     return;
   }
@@ -459,7 +556,7 @@ function onServer(m) {
     if (key !== match.lastKey) { match.ghost = null; match.path = []; match.lastKey = key; }
     const prev = match.state;
     match.state = m;
-    match.offset = m.now - Date.now(); // 서버 시계와의 차이
+    match.offset = m.now - Date.now(); // 방을 만든 쪽 시계와의 차이
     if (m.notice && m.notice.id !== match.noticeId) { match.noticeId = m.notice.id; appendConsole(m.notice.msg, 'info', m.notice.icon); }
     match.msg = '';
     // 내 돌이 확정됐거나 새 판이 시작되면 코드를 비운다 (시간 초과나 거부된 수는 쓰던 코드 유지)
@@ -485,18 +582,47 @@ function resetMatchCode() {
 }
 // ai 를 넘기면 AI 대전 방을 만든다 ('easy' | 'normal' | 'hard')
 async function createRoom(ai) {
-  const name = readNick(); if (name === null) return;
-  try { await connect(); send({ t: 'create', name, ai }); } catch (e) { match.msg = e.message; renderMatchUI(); }
+  const name = readNick();
+  if (name === null || match.busy) return;
+  match.busy = true;
+  try {
+    let code = randomCode(), peer = null;
+    // 친구 방만 연결 창구를 연다. 코드가 겹치면 다른 코드로 다시 시도.
+    for (let i = 0; !ai && !peer; i++) {
+      try { peer = await openPeer(PEER_PREFIX + code); }
+      catch (e) { if (e.type !== 'unavailable-id' || i >= 4) throw e; code = randomCode(); }
+    }
+    const net = startHost(new RoomHost(code, (snap) => tabStore.set(hostKey(code), snap)));
+    if (peer) listenForGuest(net, peer);
+    net.send({ t: 'create', name, ai });
+  } catch {
+    match.msg = '방을 열지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.';
+    renderMatchUI();
+  } finally { match.busy = false; }
 }
 async function joinRoom(code) {
-  const name = readNick(); if (name === null) return;
+  const name = readNick();
+  if (name === null || match.busy) return;
   code = (code || '').trim().toUpperCase();
-  if (code.length !== 4) { match.msg = '방 코드는 4글자예요.'; return renderMatchUI(); }
+  if (!/^[A-Z0-9]{4}$/.test(code)) { match.msg = '방 코드는 4글자예요.'; return renderMatchUI(); }
+  match.nick = name;
+  const token = tabStore.get(tokenKey(code), null), snap = tabStore.get(hostKey(code), null);
+  // 내가 만든 방을 새로고침한 경우: 저장해 둔 판으로 이어서 연다
+  if (snap && token) {
+    const net = startHost(RoomHost.restore(snap, (x) => tabStore.set(hostKey(code), x)));
+    if (!snap.ai) reopenRoom(net, code);
+    return net.send({ t: 'join', token, name });
+  }
+  match.busy = true;
+  match.msg = '방에 연결하는 중…'; renderMatchUI();
   try {
-    await connect();
-    match.nick = name;
-    send({ t: 'join', room: code, name, token: tabStore.get('pyomok.token.' + code, null) });
-  } catch (e) { match.msg = e.message; renderMatchUI(); }
+    await connectGuest(code);
+    send({ t: 'join', name, token });
+  } catch (e) {
+    onServer(e.message === 'no_room'
+      ? { t: 'error', code: 'no_room', room: code, msg: '방을 찾지 못했어요. 코드를 확인하고, 방을 만든 사람이 창을 열어 두었는지 물어보세요.' }
+      : { t: 'error', msg: '연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.' });
+  } finally { match.busy = false; }
 }
 function readNick() {
   const el = $('#nick');
@@ -524,7 +650,7 @@ function renderMatchUI() {
     if (!match.online) st = `<span class="offline">${ic('unplug')}연결이 끊겼어요 — 다시 연결하는 중…</span>`;
     const tm = s.status === 'playing' && match.online && s.deadline ? ` <span id="timer" class="pill">${ic('timer')}<span id="timerN"></span></span>` : '';
     const head = s.ai ? '<button id="quitTop" class="mini">나가기</button>'
-      : `<span>방 <b>${s.room}</b> <button id="copyBtn" class="mini">링크 복사</button></span>`;
+      : `<span>방 <b>${esc(s.room)}</b> <button id="copyBtn" class="mini">링크 복사</button></span>`;
     top.innerHTML = `${head}${nm(1)} vs ${nm(2)}<span>${st}${tm}</span>`;
     tickTimer();
     if (s.ai) $('#quitTop').onclick = quitRoom; else $('#copyBtn').onclick = copyLink;
@@ -555,8 +681,8 @@ function renderMatchUI() {
       <div class="dim" style="font-size:13px">이 링크를 보내면 친구가 바로 입장해요</div>
       <div class="link">${esc(inviteLink())}</div>
       <button id="cp2" class="primary">링크 복사</button>
-      <div class="dim" style="font-size:13px">방 코드: <b style="letter-spacing:4px;font-size:18px">${s.room}</b></div>
-      <div class="dim">${ic('hourglass')}상대를 기다리는 중…</div>
+      <div class="dim" style="font-size:13px">방 코드: <b style="letter-spacing:4px;font-size:18px">${esc(s.room)}</b></div>
+      <div class="dim">${ic('hourglass')}상대를 기다리는 중… 이 창을 닫으면 방이 사라져요</div>
       <button id="quitWait">나가기</button></div>`;
     $('#cp2').onclick = copyLink;
     $('#quitWait').onclick = quitRoom;
@@ -725,7 +851,7 @@ const urlRoom = new URLSearchParams(location.search).get('room');
 if (urlRoom) {
   setMode('match');
   // 같은 브라우저에서 이미 들어갔던 방이면 자동 재입장
-  if (tabStore.get('pyomok.token.' + urlRoom.toUpperCase(), null) && match.nick) joinRoom(urlRoom);
+  if (tabStore.get(tokenKey(urlRoom.toUpperCase()), null) && match.nick) joinRoom(urlRoom);
 } else {
   setMode('learn');
   gotoLevel(Math.min(learn.level, LEVELS.length - 1));
